@@ -32,7 +32,7 @@ fn lex<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Token, E> {
     use Token::*;
 
     if i.len() == 0 {
-        return Ok((i, EOF));
+        return Ok((i, Eof));
     }
 
     preceded(
@@ -52,5 +52,5 @@ fn lex<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Token, E> {
 fn lex_test() {
     use Token::*;
     assert_eq!(lex::<VerboseError<&str>>("1"), Ok(("", Number(1.0))));
-    assert_eq!(lex::<VerboseError<&str>>(" #hoge"), Ok(("", EOF)));
+    assert_eq!(lex::<VerboseError<&str>>(" #hoge"), Ok(("", Eof)));
 }
