@@ -1,3 +1,4 @@
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Expr {
     Number(f64),
     Variable(String),
@@ -5,5 +6,8 @@ pub(crate) enum Expr {
     Call(String, Vec<Expr>),
 }
 
-struct Prototype(String, Vec<String>);
-struct Function(Box<Prototype>, Box<Expr>);
+#[derive(Debug, PartialEq)]
+pub(crate) struct Prototype(pub(crate) String, pub(crate) Vec<String>);
+
+#[derive(Debug)]
+pub(crate) struct Function(pub(crate) Box<Prototype>, pub(crate) Box<Expr>);
