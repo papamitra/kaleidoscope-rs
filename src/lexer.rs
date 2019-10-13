@@ -1,56 +1,35 @@
 use super::token::Token;
+use combine::easy;
+use combine::error::{ParseError, UnexpectedParse};
+use combine::parser::char::{digit, spaces};
+use combine::parser::choice::or;
+use combine::parser::repeat::chainl1;
+use combine::parser::Parser;
+use combine::stream::{Stream, StreamErrorFor};
+use combine::{any, between, choice, many1, parser, satisfy_map, token};
 
-use nom::{
-    branch::alt,
-    bytes::complete::{tag, take, take_until, take_while},
-    character::complete::{alpha1, alphanumeric0, anychar},
-    combinator::map,
-    error::{ParseError, VerboseError},
-    number::complete::double,
-    sequence::{pair, preceded},
-    Err, IResult,
-};
-
-fn ws<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
-    let chars = " \t\r\n";
-
-    take_while(move |c| chars.contains(c))(i)
+fn number<Input>() -> impl Parser<Input, Output = Token>
+where
+    Input: Stream<Token = char, Error = easy::ParseError<Input>>,
+    Input::Range: PartialEq,
+    Input::Error: ParseError<
+        Input::Token,
+        Input::Range,
+        Input::Position,
+        StreamError = easy::Error<Input::Token, Input::Range>,
+    >,
+{
+    spaces()
+        .with(many1(choice((digit(), token('.')))))
+        .and_then(|ns: String| {
+            ns.parse::<f64>()
+                .map_err(|e| easy::Error::Expected(easy::Info::Static("float")))
+        })
+        .map(|n| Token::Number(n))
 }
 
-fn lex_comment<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
-    println!("lex_comment start: {}", i);
-    if let ok @ Ok(_) = take_until("\n")(i) {
-        take(1usize)(i)?;
-        ok
-    } else {
-        // reached to EOF
-        Ok(("", i))
-    }
-}
-
-fn lex<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Token, E> {
-    use Token::*;
-
-    if i.len() == 0 {
-        return Ok((i, Eof));
-    }
-
-    preceded(
-        ws,
-        alt((
-            map(pair(alpha1, alphanumeric0), |x: (&str, &str)| {
-                Ident(x.0.to_string() + &x.1.to_string())
-            }),
-            map(double, |v| Number(v)),
-            preceded(tag("#"), preceded(lex_comment, lex)),
-            map(anychar, |c| Kwd(c)),
-        )),
-    )(i)
-}
-
-#[test]
-fn lex_test() {
-    use Token::*;
-    assert_eq!(lex::<VerboseError<&str>>("1"), Ok(("", Number(1.0))));
-    assert_eq!(lex::<VerboseError<&str>>(" #hoge"), Ok(("", Eof)));
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_number() {}
 }
