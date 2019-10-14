@@ -1,6 +1,6 @@
 use super::token::Token;
 use combine::easy;
-use combine::error::{ParseError, UnexpectedParse};
+use combine::error::{ParseError, StreamError, UnexpectedParse};
 use combine::parser::char::{alpha_num, digit, newline, spaces};
 use combine::parser::choice::or;
 use combine::parser::repeat::chainl1;
@@ -10,20 +10,16 @@ use combine::{any, between, choice, eof, many, many1, parser, satisfy_map, skip_
 
 fn number<Input>() -> impl Parser<Input, Output = Token>
 where
-    Input: Stream<Token = char, Error = easy::ParseError<Input>>,
-    Input::Range: PartialEq,
-    Input::Error: ParseError<
-        Input::Token,
-        Input::Range,
-        Input::Position,
-        StreamError = easy::Error<Input::Token, Input::Range>,
-    >,
+    Input: Stream<Token = char>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
 {
     spaces()
         .with(many1(choice((digit(), token('.')))))
         .and_then(|ns: String| {
-            ns.parse::<f64>()
-                .map_err(|e| easy::Error::Expected(easy::Info::Static("float")))
+            ns.parse::<f64>().map_err(|e| {
+                <Input::Error as combine::error::ParseError<char, Input::Range, Input::Position>>
+                                                         ::StreamError::other(e)
+            })
         })
         .map(|n| Token::Number(n))
 }
@@ -54,6 +50,29 @@ where
     )))
 }
 
+/*
+fn lex_<Input>() -> impl Parser<Input, Output = Option<Token>>
+where
+    Input: Stream<Token = char>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+{
+    spaces().with(choice((
+        ident().map(|x| Some(x)),
+        number().map(|x| Some(x)),
+        comment().with(lex()),
+        eof().map(|_| None),
+    )))
+}
+
+parser! {
+    fn lex[Input]()(Input) -> Option<Token>
+        where [Input: Stream<Token=char>]
+    {
+        lex_()
+    }
+}
+*/
+
 #[cfg(test)]
 mod test {
     use super::super::token::Token::*;
@@ -70,6 +89,8 @@ mod test {
             ident().easy_parse("test").map(|x| x.0),
             Ok(Ident("test".to_owned()))
         );
+
+        assert_eq!(ident().easy_parse("def").map(|x| x.0), Ok(Def));
     }
 
     #[test]
