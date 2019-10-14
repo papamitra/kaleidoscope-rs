@@ -1,12 +1,12 @@
 use super::token::Token;
 use combine::easy;
 use combine::error::{ParseError, UnexpectedParse};
-use combine::parser::char::{alpha_num, digit, spaces};
+use combine::parser::char::{alpha_num, digit, newline, spaces};
 use combine::parser::choice::or;
 use combine::parser::repeat::chainl1;
 use combine::parser::{EasyParser, Parser};
 use combine::stream::{Stream, StreamErrorFor};
-use combine::{any, between, choice, many, many1, parser, satisfy_map, skip_many1, token};
+use combine::{any, between, choice, eof, many, many1, parser, satisfy_map, skip_many1, token};
 
 fn number<Input>() -> impl Parser<Input, Output = Token>
 where
@@ -42,13 +42,17 @@ where
         })
 }
 
-/*fn comment<Input>() -> impl Parser<Input, Output = ()>
+fn comment<Input>() -> impl Parser<Input, Output = ()>
 where
     Input: Stream<Token = char>,
     Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
 {
-    skip_many1(spaces().with(between(token('#'), token('\n'), many(any()))))
-}*/
+    skip_many1(spaces().with(between(
+        token('#'),
+        or(newline().map(|_| ()), eof()),
+        many::<Vec<_>, _, _>(any()),
+    )))
+}
 
 #[cfg(test)]
 mod test {
@@ -66,5 +70,10 @@ mod test {
             ident().easy_parse("test").map(|x| x.0),
             Ok(Ident("test".to_owned()))
         );
+    }
+
+    #[test]
+    fn test_comment() {
+        assert_eq!(comment().easy_parse("   #hoge").map(|x| x.0), Ok(()));
     }
 }
