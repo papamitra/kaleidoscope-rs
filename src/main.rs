@@ -1,8 +1,9 @@
-mod token;
+mod ast;
 mod lexer;
 mod parser;
-mod ast;
+mod token;
+mod toplevel;
 
 fn main() {
-    println!("Hello, world!");
+    toplevel::main_loop();
 }

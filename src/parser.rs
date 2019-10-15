@@ -4,7 +4,7 @@ use super::token::Token;
 use combine::error::ParseError;
 use combine::parser::choice::or;
 use combine::parser::repeat::chainl1;
-use combine::parser::Parser;
+pub(crate) use combine::parser::Parser;
 use combine::stream::Stream;
 use combine::{any, between, choice, many, parser, satisfy_map, token};
 
@@ -83,7 +83,7 @@ where
     (ident, between(token(Kwd('(')), token(Kwd(')')), args)).map(|(id, aa)| Prototype(id, aa))
 }
 
-fn definition<Input>() -> impl Parser<Input, Output = Function>
+pub(crate) fn definition<Input>() -> impl Parser<Input, Output = Function>
 where
     Input: Stream<Token = Token> + Clone,
     Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
@@ -91,7 +91,7 @@ where
     (token(Token::Def), prototype(), expr()).map(|(_, p, e)| Function(Box::new(p), Box::new(e)))
 }
 
-fn toplevel<Input>() -> impl Parser<Input, Output = Function>
+pub(crate) fn toplevel<Input>() -> impl Parser<Input, Output = Function>
 where
     Input: Stream<Token = Token> + Clone,
     Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
@@ -99,7 +99,7 @@ where
     expr().map(|e| Function(Box::new(Prototype("".to_owned(), vec![])), Box::new(e)))
 }
 
-fn extern_parser<Input>() -> impl Parser<Input, Output = Prototype>
+pub(crate) fn extern_parser<Input>() -> impl Parser<Input, Output = Prototype>
 where
     Input: Stream<Token = Token> + Clone,
     Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,

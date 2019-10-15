@@ -63,7 +63,7 @@ where
 }
 
 parser! {
-    fn lex[Input]()(Input) -> Option<Token>
+    pub(crate) fn lex[Input]()(Input) -> Option<Token>
         where [Input: Stream<Token=char>]
     {
         lex_()
