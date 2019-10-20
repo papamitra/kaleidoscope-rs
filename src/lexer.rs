@@ -58,6 +58,7 @@ where
         number().map(|x| Some(x)),
         ident().map(|x| Some(x)),
         comment().with(lex()),
+        any().map(|c| Some(Token::Kwd(c))),
         eof().map(|_| None),
     )))
 }
@@ -88,6 +89,11 @@ mod test {
         );
 
         assert_eq!(ident().easy_parse("def").map(|x| x.0), Ok(Def));
+
+        assert_eq!(
+            ident().easy_parse("foo(").map(|x| x.0),
+            Ok(Ident("foo".to_owned()))
+        );
     }
 
     #[test]
@@ -106,6 +112,51 @@ mod test {
                 )
                 .map(|x| x.0),
             Ok(Some(Number(1.0)))
+        );
+    }
+
+    fn lex_tokens(s: &str) -> Vec<Token> {
+        let mut buf = s;
+        let mut tokens = Vec::new();
+        loop {
+            match super::lex().parse(buf) {
+                Ok((Some(token), rest)) => {
+                    buf = rest;
+                    tokens.push(token);
+                }
+                Ok(_) => break,
+                e => {
+                    println!("error: {:?}", e);
+                    e.unwrap();
+                }
+            }
+        }
+
+        tokens
+    }
+
+    #[test]
+    fn test_tokens() {
+        use super::super::token::Token::*;
+        assert_eq!(
+            lex_tokens("def foo(x y) x+foo(y, 4.0);"),
+            vec![
+                Def,
+                Ident("foo".to_owned()),
+                Kwd('('),
+                Ident("x".to_owned()),
+                Ident("y".to_owned()),
+                Kwd(')'),
+                Ident("x".to_owned()),
+                Kwd('+'),
+                Ident("foo".to_owned()),
+                Kwd('('),
+                Ident("y".to_owned()),
+                Kwd(','),
+                Number(4.0),
+                Kwd(')'),
+                Kwd(';')
+            ]
         );
     }
 }

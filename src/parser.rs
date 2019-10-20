@@ -6,7 +6,38 @@ use combine::parser::choice::or;
 use combine::parser::repeat::chainl1;
 pub(crate) use combine::parser::Parser;
 use combine::stream::Stream;
-use combine::{any, between, choice, many, parser, satisfy_map, token};
+use combine::{any, attempt, between, choice, many, parser, satisfy_map, sep_by, token};
+
+fn ident<Input>() -> impl Parser<Input, Output = String>
+where
+    Input: Stream<Token = Token>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+{
+    satisfy_map(|t| match t {
+        Token::Ident(id) => Some(id),
+        _ => None,
+    })
+}
+
+fn args<Input>() -> impl Parser<Input, Output = Vec<Expr>>
+where
+    Input: Stream<Token = Token>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+{
+    sep_by(expr(), token(Token::Kwd(',')))
+}
+
+fn call<Input>() -> impl Parser<Input, Output = Expr>
+where
+    Input: Stream<Token = Token>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+{
+    (
+        ident(),
+        between(token(Token::Kwd('(')), token(Token::Kwd(')')), args()),
+    )
+        .map(|(id, aa)| Expr::Call(id, aa))
+}
 
 fn primary_<Input>() -> impl Parser<Input, Output = Expr>
 where
@@ -21,7 +52,14 @@ where
 
     let paren = between(token(Kwd('(')), token(Kwd(')')), expr());
 
-    choice((number, paren))
+    let variable = ident().map(|id| Expr::Variable(id));
+
+    choice((
+        attempt(number),
+        attempt(paren),
+        attempt(call()),
+        attempt(variable),
+    ))
 }
 
 parser! {
@@ -38,7 +76,7 @@ where
     Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
 {
     let lt = token(Token::Kwd('<')).map(|_| |l, r| Expr::Binary('<', Box::new(l), Box::new(r)));
-    chainl1(add(), lt)
+    or(chainl1(add(), lt), add())
 }
 
 fn add<Input>() -> impl Parser<Input, Output = Expr>
@@ -46,12 +84,15 @@ where
     Input: Stream<Token = Token>,
     Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
 {
-    chainl1(
+    or(
+        chainl1(
+            mul(),
+            or(token(Token::Kwd('+')), token(Token::Kwd('-'))).map(|t| match t {
+                Token::Kwd(c) => move |l, r| Expr::Binary(c, Box::new(l), Box::new(r)),
+                _ => unreachable!(),
+            }),
+        ),
         mul(),
-        or(token(Token::Kwd('+')), token(Token::Kwd('-'))).map(|t| match t {
-            Token::Kwd(c) => move |l, r| Expr::Binary(c, Box::new(l), Box::new(r)),
-            _ => unreachable!(),
-        }),
     )
 }
 
@@ -60,9 +101,12 @@ where
     Input: Stream<Token = Token>,
     Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
 {
-    chainl1(
+    or(
+        chainl1(
+            primary(),
+            token(Token::Kwd('*')).map(|_| |l, r| Expr::Binary('*', Box::new(l), Box::new(r))),
+        ),
         primary(),
-        token(Token::Kwd('*')).map(|_| |l, r| Expr::Binary('*', Box::new(l), Box::new(r))),
     )
 }
 
@@ -73,14 +117,9 @@ where
 {
     use super::token::Token::*;
 
-    let ident = satisfy_map(|t| match t {
-        Ident(id) => Some(id),
-        _ => None,
-    });
+    let args = many(ident());
 
-    let args = many(ident.clone());
-
-    (ident, between(token(Kwd('(')), token(Kwd(')')), args)).map(|(id, aa)| Prototype(id, aa))
+    (ident(), between(token(Kwd('(')), token(Kwd(')')), args)).map(|(id, aa)| Prototype(id, aa))
 }
 
 pub(crate) fn definition<Input>() -> impl Parser<Input, Output = Function>
@@ -127,11 +166,21 @@ mod test {
 
     #[test]
     fn test_primary() {
-        let tokens = vec![Token::Number(1.0)];
-        assert_eq!(
-            primary().parse(tokens.as_slice()).map(|x| x.0),
-            Ok(Expr::Number(1.0))
-        );
+        {
+            let tokens = vec![Token::Number(1.0)];
+            assert_eq!(
+                primary().parse(tokens.as_slice()).map(|x| x.0),
+                Ok(Expr::Number(1.0))
+            );
+        }
+
+        {
+            let tokens = vec![Token::Ident("y".to_owned())];
+            assert_eq!(
+                primary().parse(tokens.as_slice()).map(|x| x.0),
+                Ok(Expr::Variable("y".to_owned()))
+            );
+        }
     }
 
     #[test]
@@ -187,6 +236,14 @@ mod test {
                 ))
             );
         }
+
+        {
+            let tokens = vec![Ident("y".to_owned())];
+            assert_eq!(
+                expr().parse(tokens.as_slice()).map(|x| x.0),
+                Ok(Expr::Variable("y".to_owned()))
+            );
+        }
     }
 
     #[test]
@@ -198,5 +255,46 @@ mod test {
                 Ok(Prototype("f".to_owned(), vec![]))
             );
         }
+    }
+
+    fn lex_tokens(s: &str) -> Vec<Token> {
+        let mut buf = s;
+        let mut tokens = Vec::new();
+        loop {
+            match super::super::lexer::lex().parse(buf) {
+                Ok((Some(token), rest)) => {
+                    buf = rest;
+                    tokens.push(token);
+                }
+                Ok(_) => break,
+                e => {
+                    println!("error: {:?}", e);
+                    e.unwrap();
+                }
+            }
+        }
+
+        tokens
+    }
+
+    #[test]
+    fn test_call() {
+        let tokens = lex_tokens("foo(y, 4.0)");
+        assert_eq!(
+            call().parse(tokens.as_slice()).map(|x| x.0),
+            Ok(Expr::Call(
+                "foo".to_owned(),
+                vec![Expr::Variable("y".to_owned()), Expr::Number(4.0)]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_args() {
+        let tokens = lex_tokens("y, 4.0");
+        assert_eq!(
+            args().parse(tokens.as_slice()).map(|x| x.0),
+            Ok(vec![Expr::Variable("y".to_owned()), Expr::Number(4.0)])
+        );
     }
 }

@@ -2,13 +2,14 @@ use super::lexer;
 use super::parser;
 use super::token::Token;
 use combine::Parser;
-use std::io;
+use std::io::{stdin, stdout, Write};
 
 pub(crate) fn main_loop() {
     'outer: loop {
-        println!("Ready> ");
+        print!("Ready> ");
+        stdout().flush();
         let mut line = String::new();
-        io::stdin().read_line(&mut line).unwrap();
+        stdin().read_line(&mut line).unwrap();
         let mut buf = line.as_str();
         let mut tokens = Vec::new();
         loop {
@@ -29,6 +30,7 @@ pub(crate) fn main_loop() {
 
         while ts.len() > 0 {
             match ts[0] {
+                Token::Kwd(';') => ts = &ts[1..],
                 Token::Def => match parser::definition().parse(ts) {
                     Ok((_, rest)) => {
                         println!("parse definition");
