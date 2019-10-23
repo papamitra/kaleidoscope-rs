@@ -7,7 +7,7 @@ use std::io::{stdin, stdout, Write};
 pub(crate) fn main_loop() {
     'outer: loop {
         print!("Ready> ");
-        stdout().flush();
+        stdout().flush().unwrap();
         let mut line = String::new();
         stdin().read_line(&mut line).unwrap();
         let mut buf = line.as_str();
