@@ -1,8 +1,11 @@
+use super::codegen;
 use super::lexer;
 use super::parser;
 use super::token::Token;
 use combine::Parser;
 use std::io::{stdin, stdout, Write};
+
+use llvm_sys::core;
 
 pub(crate) fn main_loop() {
     'outer: loop {
@@ -32,8 +35,14 @@ pub(crate) fn main_loop() {
             match ts[0] {
                 Token::Kwd(';') => ts = &ts[1..],
                 Token::Def => match parser::definition().parse(ts) {
-                    Ok((_, rest)) => {
-                        println!("parse definition");
+                    Ok((e, rest)) => {
+                        println!("parse a function definition.");
+                        unsafe {
+                            match codegen::codegen_func(&e) {
+                                Ok(v) => core::LLVMDumpValue(v),
+                                Err(e) => println!("error: {}", e),
+                            }
+                        };
                         ts = rest;
                     }
                     Err(e) => {
@@ -42,8 +51,14 @@ pub(crate) fn main_loop() {
                     }
                 },
                 Token::Extern => match parser::extern_parser().parse(ts) {
-                    Ok((_, rest)) => {
-                        println!("parse extern");
+                    Ok((p, rest)) => {
+                        println!("parsed an extern.");
+                        unsafe {
+                            match codegen::codegen_proto(&p) {
+                                Ok(v) => core::LLVMDumpValue(v),
+                                Err(e) => println!("error: {}", e),
+                            }
+                        };
                         ts = rest;
                     }
                     Err(e) => {
@@ -52,8 +67,14 @@ pub(crate) fn main_loop() {
                     }
                 },
                 _ => match parser::toplevel().parse(ts) {
-                    Ok((_, rest)) => {
-                        println!("parse toplevel");
+                    Ok((e, rest)) => {
+                        println!("parse a top-level expr");
+                        unsafe {
+                            match codegen::codegen_func(&e) {
+                                Ok(v) => core::LLVMDumpValue(v),
+                                Err(e) => println!("error: {}", e),
+                            }
+                        };
                         ts = rest;
                     }
                     Err(e) => {

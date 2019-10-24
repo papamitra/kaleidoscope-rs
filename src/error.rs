@@ -9,12 +9,12 @@ pub struct Error {
 
 #[derive(Fail, Debug)]
 pub enum ErrorKind {
-    #[fail(display = "Codegen error")]
+    #[fail(display = "Codegen error: {}", _0)]
     Codegen(String),
 }
 
 impl Fail for Error {
-    fn cause(&self) -> Option<&Fail> {
+    fn cause(&self) -> Option<&dyn Fail> {
         self.inner.cause()
     }
 
