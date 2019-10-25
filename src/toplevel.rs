@@ -5,7 +5,7 @@ use super::token::Token;
 use combine::Parser;
 use std::io::{stdin, stdout, Write};
 
-use llvm_sys::core;
+use llvm_sys::{core, execution_engine};
 
 pub(crate) fn main_loop() {
     'outer: loop {
@@ -71,7 +71,9 @@ pub(crate) fn main_loop() {
                         println!("parse a top-level expr");
                         unsafe {
                             match codegen::codegen_func(&e) {
-                                Ok(v) => core::LLVMDumpValue(v),
+                                Ok(the_function) => {
+                                    core::LLVMDumpValue(the_function);
+                                }
                                 Err(e) => println!("error: {}", e),
                             }
                         };

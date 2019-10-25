@@ -10,7 +10,7 @@ use super::error::{Error, ErrorKind};
 
 thread_local! {
     static CONTEXT: LLVMContextRef = unsafe {core::LLVMContextCreate()};
-    static THE_MODULE: LLVMModuleRef = unsafe {
+    pub(crate) static THE_MODULE: LLVMModuleRef = unsafe {
         CONTEXT.with(|c|
         core::LLVMModuleCreateWithNameInContext(b"my cool jit\0".as_ptr() as *const _, *c))
     };
