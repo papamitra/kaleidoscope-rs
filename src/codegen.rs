@@ -9,7 +9,7 @@ use super::ast::{Expr, Function, Prototype};
 use super::error::{Error, ErrorKind};
 
 thread_local! {
-    static CONTEXT: LLVMContextRef = unsafe {core::LLVMContextCreate()};
+    pub(crate) static CONTEXT: LLVMContextRef = unsafe {core::LLVMContextCreate()};
     pub(crate) static THE_MODULE: LLVMModuleRef = unsafe {
         CONTEXT.with(|c|
         core::LLVMModuleCreateWithNameInContext(b"my cool jit\0".as_ptr() as *const _, *c))
@@ -19,7 +19,7 @@ thread_local! {
         core::LLVMCreateBuilderInContext(*c))
     };
 
-    static DOUBLE_TYPE:LLVMTypeRef = unsafe {
+    pub(crate) static DOUBLE_TYPE:LLVMTypeRef = unsafe {
         CONTEXT.with(|c|
         core::LLVMDoubleTypeInContext(*c))
     };
@@ -159,7 +159,12 @@ pub(crate) unsafe fn codegen_proto(
     })
 }
 
-pub(crate) unsafe fn codegen_func(Function(proto, body): &Function) -> Result<LLVMValueRef, Error> {
+pub(crate) unsafe fn codegen_func(
+    the_fpm: LLVMPassManagerRef,
+    Function(proto, body): &Function,
+) -> Result<LLVMValueRef, Error> {
+    NAMED_VALUES.with(|named_values| named_values.borrow_mut().clear());
+
     let the_function = codegen_proto(proto)?;
     let ret = CONTEXT.with(|context| {
         BUILDER.with(|builder| {
@@ -178,6 +183,8 @@ pub(crate) unsafe fn codegen_func(Function(proto, body): &Function) -> Result<LL
                 the_function,
                 analysis::LLVMVerifierFailureAction::LLVMAbortProcessAction,
             );
+
+            core::LLVMRunFunctionPassManager(the_fpm, the_function);
 
             Ok(the_function)
         })
