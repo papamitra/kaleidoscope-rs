@@ -6,7 +6,7 @@ use combine::parser::choice::or;
 use combine::parser::repeat::chainl1;
 pub(crate) use combine::parser::Parser;
 use combine::stream::Stream;
-use combine::{any, attempt, between, choice, many, parser, satisfy_map, sep_by, token};
+use combine::{any, attempt, between, choice, many, optional, parser, satisfy_map, sep_by, token};
 
 fn ident<Input>() -> impl Parser<Input, Output = String>
 where
@@ -59,6 +59,8 @@ where
         attempt(paren),
         attempt(call()),
         attempt(variable),
+        attempt(parse_if()),
+        attempt(parse_for()),
     ))
 }
 
@@ -68,6 +70,46 @@ parser! {
     {
         primary_()
     }
+}
+
+fn parse_if<Input>() -> impl Parser<Input, Output = Expr>
+where
+    Input: Stream<Token = Token>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+{
+    use super::token::Token::*;
+
+    (token(If), expr(), token(Then), expr(), token(Else), expr())
+        .map(|(_, c, _, t, _, e)| Expr::If(Box::new(c), Box::new(t), Box::new(e)))
+}
+
+fn parse_for<Input>() -> impl Parser<Input, Output = Expr>
+where
+    Input: Stream<Token = Token>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+{
+    use super::token::Token::*;
+
+    (
+        token(For),
+        ident(),
+        token(Kwd('=')),
+        expr(),
+        token(Kwd(',')),
+        expr(),
+        optional((token(Kwd(',')), expr()).map(|(_, e)| e)),
+        token(In),
+        expr(),
+    )
+        .map(|(_, id, _, start, _, end, step, _, body)| {
+            Expr::For(
+                id,
+                Box::new(start),
+                Box::new(end),
+                Box::new(step),
+                Box::new(body),
+            )
+        })
 }
 
 fn expr<Input>() -> impl Parser<Input, Output = Expr>
@@ -296,5 +338,36 @@ mod test {
             args().parse(tokens.as_slice()).map(|x| x.0),
             Ok(vec![Expr::Variable("y".to_owned()), Expr::Number(4.0)])
         );
+    }
+
+    #[test]
+    fn test_for() {
+        {
+            let tokens = lex_tokens("for i=1, 3 in 3");
+            assert_eq!(
+                parse_for().parse(tokens.as_slice()).map(|x| x.0),
+                Ok(Expr::For(
+                    "i".to_owned(),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(None),
+                    Box::new(Expr::Number(3.0))
+                ))
+            );
+        }
+
+        {
+            let tokens = lex_tokens("for i=1, 3,2 in 3");
+            assert_eq!(
+                parse_for().parse(tokens.as_slice()).map(|x| x.0),
+                Ok(Expr::For(
+                    "i".to_owned(),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Some(Expr::Number(2.0))),
+                    Box::new(Expr::Number(3.0))
+                ))
+            );
+        }
     }
 }

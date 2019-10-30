@@ -111,6 +111,7 @@ unsafe fn codegen_expr(e: &Expr) -> Result<LLVMValueRef, Error> {
                 ))
             })
         }),
+        _ => unimplemented!(),
     }
 }
 

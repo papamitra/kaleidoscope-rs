@@ -4,6 +4,8 @@ pub(crate) enum Expr {
     Variable(String),
     Binary(char, Box<Expr>, Box<Expr>),
     Call(String, Vec<Expr>),
+    If(Box<Expr>, Box<Expr>, Box<Expr>),
+    For(String, Box<Expr>, Box<Expr>, Box<Option<Expr>>, Box<Expr>),
 }
 
 #[derive(Debug, PartialEq)]

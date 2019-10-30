@@ -34,6 +34,11 @@ where
     many1(alpha_num()).map(|s: String| match s.as_ref() {
         "def" => Token::Def,
         "extern" => Token::Extern,
+        "if" => Token::If,
+        "then" => Token::Then,
+        "else" => Token::Else,
+        "for" => Token::For,
+        "in" => Token::In,
         id => Token::Ident(id.to_string()),
     })
 }
