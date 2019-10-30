@@ -6,12 +6,14 @@ use combine::Parser;
 use std::io::{stdin, stdout, Write};
 use std::ptr::null_mut;
 
+use llvm_sys::core::*;
+use llvm_sys::execution_engine::*;
 use llvm_sys::prelude::*;
-use llvm_sys::{core, execution_engine};
 
 pub(crate) unsafe fn main_loop(
+    c: &mut codegen::Context,
     the_fpm: LLVMPassManagerRef,
-    the_execution_engine: execution_engine::LLVMExecutionEngineRef,
+    the_execution_engine: LLVMExecutionEngineRef,
 ) {
     'outer: loop {
         print!("Ready> ");
@@ -43,8 +45,8 @@ pub(crate) unsafe fn main_loop(
                     Ok((e, rest)) => {
                         println!("parse a function definition.");
                         unsafe {
-                            match codegen::codegen_func(the_fpm, &e) {
-                                Ok(v) => core::LLVMDumpValue(v),
+                            match codegen::codegen_func(c, the_fpm, &e) {
+                                Ok(v) => LLVMDumpValue(v),
                                 Err(e) => println!("error: {}", e),
                             }
                         };
@@ -59,8 +61,8 @@ pub(crate) unsafe fn main_loop(
                     Ok((p, rest)) => {
                         println!("parsed an extern.");
                         unsafe {
-                            match codegen::codegen_proto(&p) {
-                                Ok(v) => core::LLVMDumpValue(v),
+                            match codegen::codegen_proto(c, &p) {
+                                Ok(v) => LLVMDumpValue(v),
                                 Err(e) => println!("error: {}", e),
                             }
                         };
@@ -75,11 +77,11 @@ pub(crate) unsafe fn main_loop(
                     Ok((e, rest)) => {
                         println!("parse a top-level expr");
                         unsafe {
-                            match codegen::codegen_func(the_fpm, &e) {
+                            match codegen::codegen_func(c, the_fpm, &e) {
                                 Ok(the_function) => {
-                                    core::LLVMDumpValue(the_function);
+                                    LLVMDumpValue(the_function);
 
-                                    let result = execution_engine::LLVMRunFunction(
+                                    let result = LLVMRunFunction(
                                         the_execution_engine,
                                         the_function as *mut _,
                                         0,
@@ -88,15 +90,10 @@ pub(crate) unsafe fn main_loop(
                                     println!("the_function: {:?}", the_function);
                                     println!("result: {:?}", result);
 
-                                    codegen::DOUBLE_TYPE.with(|double_type| {
-                                        println!(
-                                            "Evaluated to {}",
-                                            execution_engine::LLVMGenericValueToFloat(
-                                                *double_type,
-                                                result
-                                            ) as f64
-                                        );
-                                    });
+                                    println!(
+                                        "Evaluated to {}",
+                                        LLVMGenericValueToFloat(c.double_type, result) as f64
+                                    );
                                 }
                                 Err(e) => println!("error: {}", e),
                             }

@@ -6,59 +6,58 @@ mod parser;
 mod token;
 mod toplevel;
 
+use llvm_sys::core::*;
+use llvm_sys::execution_engine::*;
+use llvm_sys::target::*;
 use llvm_sys::transforms::{instcombine, scalar};
-use llvm_sys::{core, execution_engine, target, target_machine};
 use std::ffi::CString;
 use std::mem::{transmute, MaybeUninit};
 use std::ptr::null_mut;
 
 fn main() {
-    let mut the_execution_engine =
-        MaybeUninit::<execution_engine::LLVMExecutionEngineRef>::uninit();
+    let mut the_execution_engine = MaybeUninit::<LLVMExecutionEngineRef>::uninit();
 
     unsafe {
         // robust code should check that these calls complete successfully
         // each of these calls is necessary to setup an execution engine which compiles to native
         // code
-        execution_engine::LLVMLinkInMCJIT();
-        target::LLVM_InitializeNativeTarget();
-        target::LLVM_InitializeNativeAsmPrinter();
-        target::LLVM_InitializeNativeAsmParser();
+        LLVMLinkInMCJIT();
+        LLVM_InitializeNativeTarget();
+        LLVM_InitializeNativeAsmPrinter();
+        LLVM_InitializeNativeAsmParser();
 
-        codegen::THE_MODULE.with(|the_module| {
-            execution_engine::LLVMCreateExecutionEngineForModule(
-                the_execution_engine.as_mut_ptr(),
-                *the_module,
-                null_mut::<*mut ::libc::c_char>(),
-            );
+        let mut c = codegen::Context::new();
 
-            let the_execution_engine =
-                transmute::<_, execution_engine::LLVMExecutionEngineRef>(the_execution_engine);
+        LLVMCreateExecutionEngineForModule(
+            the_execution_engine.as_mut_ptr(),
+            c.the_module,
+            null_mut::<*mut ::libc::c_char>(),
+        );
 
-            // for debug
-            //            let target_machine =
-            //                execution_engine::LLVMGetExecutionEngineTargetMachine(the_execution_engine);
-            // let triplet = target_machine::LLVMGetTargetMachineTriple(target_machine);
-            // println!("triple: {}", CString::from_raw(triplet).to_str().unwrap());
+        let the_execution_engine = transmute::<_, LLVMExecutionEngineRef>(the_execution_engine);
 
-            let data_layout =
-                execution_engine::LLVMGetExecutionEngineTargetData(the_execution_engine);
+        // for debug
+        //            let target_machine =
+        //                execution_engine::LLVMGetExecutionEngineTargetMachine(the_execution_engine);
+        // let triplet = target_machine::LLVMGetTargetMachineTriple(target_machine);
+        // println!("triple: {}", CString::from_raw(triplet).to_str().unwrap());
 
-            target::LLVMSetModuleDataLayout(*the_module, data_layout);
+        let data_layout = LLVMGetExecutionEngineTargetData(the_execution_engine);
 
-            let the_fpm = core::LLVMCreateFunctionPassManagerForModule(*the_module);
+        LLVMSetModuleDataLayout(c.the_module, data_layout);
 
-            instcombine::LLVMAddInstructionCombiningPass(the_fpm);
+        let the_fpm = LLVMCreateFunctionPassManagerForModule(c.the_module);
 
-            scalar::LLVMAddReassociatePass(the_fpm);
+        instcombine::LLVMAddInstructionCombiningPass(the_fpm);
 
-            scalar::LLVMAddGVNPass(the_fpm);
+        scalar::LLVMAddReassociatePass(the_fpm);
 
-            scalar::LLVMAddCFGSimplificationPass(the_fpm);
+        scalar::LLVMAddGVNPass(the_fpm);
 
-            core::LLVMInitializeFunctionPassManager(the_fpm);
+        scalar::LLVMAddCFGSimplificationPass(the_fpm);
 
-            toplevel::main_loop(the_fpm, the_execution_engine);
-        });
+        LLVMInitializeFunctionPassManager(the_fpm);
+
+        toplevel::main_loop(&mut c, the_fpm, the_execution_engine);
     }
 }
